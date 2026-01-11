@@ -117,12 +117,43 @@ export default function KlingDashboard({ user: initialUser, onLogout, onUserUpda
   useEffect(() => {
     refreshUserData();
 
-    const interval = setInterval(() => {
-      refreshUserData();
-    }, 10000);
+    const usersChannel = supabase
+      .channel('kling-users-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'users',
+          filter: `id=eq.${currentUser.id}`
+        },
+        () => {
+          refreshUserData();
+        }
+      )
+      .subscribe();
 
-    return () => clearInterval(interval);
-  }, [refreshUserData]);
+    const apiKeysChannel = supabase
+      .channel('kling-api-keys-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'api_keys',
+          filter: `user_id=eq.${currentUser.id}`
+        },
+        () => {
+          refreshUserData();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      usersChannel.unsubscribe();
+      apiKeysChannel.unsubscribe();
+    };
+  }, [refreshUserData, currentUser.id]);
 
   const handleGenerate = useCallback(async () => {
     await refreshUserData();

@@ -85,12 +85,60 @@ export default function Dashboard({ user, onLogout, onUserUpdate }: DashboardPro
     loadPricing();
     refreshUserData();
 
-    const interval = setInterval(() => {
-      refreshUserData();
-    }, 10000);
+    const usersChannel = supabase
+      .channel('users-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'users',
+          filter: `id=eq.${user.id}`
+        },
+        () => {
+          refreshUserData();
+        }
+      )
+      .subscribe();
 
-    return () => clearInterval(interval);
-  }, [refreshUserData]);
+    const apiKeysChannel = supabase
+      .channel('api-keys-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'api_keys',
+          filter: `user_id=eq.${user.id}`
+        },
+        () => {
+          refreshUserData();
+        }
+      )
+      .subscribe();
+
+    const historyChannel = supabase
+      .channel('history-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'generation_history',
+          filter: `user_id=eq.${user.id}`
+        },
+        () => {
+          refreshUserData();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      usersChannel.unsubscribe();
+      apiKeysChannel.unsubscribe();
+      historyChannel.unsubscribe();
+    };
+  }, [refreshUserData, user.id]);
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];

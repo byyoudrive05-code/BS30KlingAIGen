@@ -24,12 +24,32 @@ export default function History({ userId, onVideoClick, onReusePrompt, refreshTr
     loadHistory();
     loadTotalCount();
     pollVideoStatus();
-    const interval = setInterval(() => {
-      loadHistory();
-      loadTotalCount();
+
+    const channel = supabase
+      .channel('history-realtime')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'generation_history',
+          filter: `user_id=eq.${userId}`
+        },
+        () => {
+          loadHistory();
+          loadTotalCount();
+        }
+      )
+      .subscribe();
+
+    const pollInterval = setInterval(() => {
       pollVideoStatus();
-    }, 10000);
-    return () => clearInterval(interval);
+    }, 30000);
+
+    return () => {
+      channel.unsubscribe();
+      clearInterval(pollInterval);
+    };
   }, [userId, currentPage]);
 
   useEffect(() => {

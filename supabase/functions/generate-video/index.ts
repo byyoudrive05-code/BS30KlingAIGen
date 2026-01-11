@@ -114,83 +114,24 @@ Deno.serve(async (req: Request) => {
       .order("created_at", { ascending: true });
 
     let selectedApiKey = null;
-    let falResponse = null;
     let useLegacyCredit = false;
-
-    const falEndpoint = getFalEndpoint(modelVersion, variant);
-    const falPayload = buildFalPayload({
-      prompt,
-      imageUrl,
-      imageUrl2,
-      videoUrl,
-      aspectRatio,
-      duration,
-      generateAudio: audioEnabled,
-      characterOrientation,
-      keepOriginalSound,
-      variant,
-    });
-
-    console.log('FAL Endpoint:', falEndpoint);
-    console.log('FAL Payload:', JSON.stringify(falPayload));
+    let apiKeyToUse = null;
 
     if (!apiKeysError && apiKeys && apiKeys.length > 0) {
-      for (const apiKey of apiKeys) {
-        try {
-          const response = await fetch(`https://queue.fal.run/${falEndpoint}`, {
-            method: "POST",
-            headers: {
-              "Authorization": `Key ${apiKey.api_key}`,
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify(falPayload),
-          });
-
-          falResponse = await response.json();
-
-          if (response.ok) {
-            selectedApiKey = apiKey;
-            break;
-          } else {
-            console.error(`API key ${apiKey.id} failed:`, falResponse);
-          }
-        } catch (error) {
-          console.error(`Failed to use API key ${apiKey.id}:`, error);
-          continue;
-        }
-      }
-    }
-
-    if (!selectedApiKey && user.api_key) {
+      selectedApiKey = apiKeys[0];
+      apiKeyToUse = selectedApiKey.api_key;
+    } else if (user.api_key) {
       const totalUserCredits = Number(user.credits) || 0;
       if (totalUserCredits >= creditsNeeded) {
-        try {
-          const response = await fetch(`https://queue.fal.run/${falEndpoint}`, {
-            method: "POST",
-            headers: {
-              "Authorization": `Key ${user.api_key}`,
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify(falPayload),
-          });
-
-          falResponse = await response.json();
-
-          if (response.ok) {
-            useLegacyCredit = true;
-          } else {
-            console.error("Legacy API key failed:", falResponse);
-          }
-        } catch (error) {
-          console.error("Failed to use legacy API key:", error);
-        }
+        useLegacyCredit = true;
+        apiKeyToUse = user.api_key;
       }
     }
 
-    if (!selectedApiKey && !useLegacyCredit) {
+    if (!apiKeyToUse) {
       return new Response(
         JSON.stringify({
-          error: falResponse?.error || falResponse?.detail || "Kredit tidak cukup atau API key tidak valid. Silakan cek API key Anda di admin panel atau hubungi admin."
+          error: "Kredit tidak cukup atau API key tidak valid. Silakan cek API key Anda di admin panel atau hubungi admin."
         }),
         {
           status: 400,
@@ -198,6 +139,8 @@ Deno.serve(async (req: Request) => {
         }
       );
     }
+
+    const falEndpoint = getFalEndpoint(modelVersion, variant);
 
     const historyData: any = {
       user_id: userId,
@@ -207,10 +150,6 @@ Deno.serve(async (req: Request) => {
       duration: duration || 0,
       credits_used: creditsNeeded,
       status: "processing",
-      request_id: falResponse.request_id,
-      fal_status_url: falResponse.status_url,
-      fal_response_url: falResponse.response_url,
-      fal_cancel_url: falResponse.cancel_url,
       fal_endpoint: falEndpoint,
       model_type: modelType,
       model_version: modelVersion,
@@ -256,14 +195,124 @@ Deno.serve(async (req: Request) => {
         .eq("id", userId);
     }
 
+    const falPayload = buildFalPayload({
+      prompt,
+      imageUrl,
+      imageUrl2,
+      videoUrl,
+      aspectRatio,
+      duration,
+      generateAudio: audioEnabled,
+      characterOrientation,
+      keepOriginalSound,
+      variant,
+    });
+
+    console.log('FAL Endpoint:', falEndpoint);
+    console.log('FAL Payload:', JSON.stringify(falPayload));
+
+    try {
+      const response = await fetch(`https://queue.fal.run/${falEndpoint}`, {
+        method: "POST",
+        headers: {
+          "Authorization": `Key ${apiKeyToUse}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(falPayload),
+      });
+
+      const falResponse = await response.json();
+
+      if (!response.ok) {
+        console.error("FAL API error:", falResponse);
+
+        await supabase
+          .from("generation_history")
+          .update({ status: "failed" })
+          .eq("id", historyEntry.id);
+
+        if (selectedApiKey) {
+          await supabase
+            .from("api_keys")
+            .update({ credits: selectedApiKey.credits + creditsNeeded })
+            .eq("id", selectedApiKey.id);
+        } else if (useLegacyCredit) {
+          await supabase
+            .from("users")
+            .update({ credits: user.credits + creditsNeeded })
+            .eq("id", userId);
+        }
+
+        return new Response(
+          JSON.stringify({
+            error: falResponse?.error || falResponse?.detail || "Gagal memulai generate video"
+          }),
+          {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          }
+        );
+      }
+
+      await supabase
+        .from("generation_history")
+        .update({
+          request_id: falResponse.request_id,
+          fal_status_url: falResponse.status_url,
+          fal_response_url: falResponse.response_url,
+          fal_cancel_url: falResponse.cancel_url,
+        })
+        .eq("id", historyEntry.id);
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          message: "Video sedang diproses. Silakan tunggu beberapa saat.",
+          historyId: historyEntry.id,
+          requestId: falResponse.request_id,
+          usedApiKeyId: selectedApiKey?.id || null,
+          usedLegacyCredit: useLegacyCredit,
+        }),
+        {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    } catch (error) {
+      console.error("Failed to call FAL API:", error);
+
+      await supabase
+        .from("generation_history")
+        .update({ status: "failed" })
+        .eq("id", historyEntry.id);
+
+      if (selectedApiKey) {
+        await supabase
+          .from("api_keys")
+          .update({ credits: selectedApiKey.credits + creditsNeeded })
+          .eq("id", selectedApiKey.id);
+      } else if (useLegacyCredit) {
+        await supabase
+          .from("users")
+          .update({ credits: user.credits + creditsNeeded })
+          .eq("id", userId);
+      }
+
+      return new Response(
+        JSON.stringify({
+          error: "Gagal menghubungi FAL API"
+        }),
+        {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
+
     return new Response(
       JSON.stringify({
         success: true,
         message: "Video sedang diproses. Silakan tunggu beberapa saat.",
         historyId: historyEntry.id,
-        requestId: falResponse.request_id,
-        usedApiKeyId: selectedApiKey?.id || null,
-        usedLegacyCredit: useLegacyCredit,
       }),
       {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
