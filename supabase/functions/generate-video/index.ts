@@ -105,33 +105,18 @@ Deno.serve(async (req: Request) => {
       creditsNeeded = priceData.price * duration;
     }
 
-    const { data: apiKeys, error: apiKeysError } = await supabase
-      .from("api_keys")
-      .select("*")
-      .eq("user_id", userId)
-      .eq("is_active", true)
-      .gte("credits", creditsNeeded)
-      .order("created_at", { ascending: true });
-
-    let selectedApiKey = null;
-    let useLegacyCredit = false;
-    let apiKeyToUse = null;
-
-    if (!apiKeysError && apiKeys && apiKeys.length > 0) {
-      selectedApiKey = apiKeys[0];
-      apiKeyToUse = selectedApiKey.api_key;
-    } else if (user.api_key) {
-      const totalUserCredits = Number(user.credits) || 0;
-      if (totalUserCredits >= creditsNeeded) {
-        useLegacyCredit = true;
-        apiKeyToUse = user.api_key;
+    const { data: deductResult, error: deductError } = await supabase.rpc(
+      "deduct_credits_atomic",
+      {
+        p_user_id: userId,
+        p_credits_needed: creditsNeeded,
       }
-    }
+    );
 
-    if (!apiKeyToUse) {
+    if (deductError || !deductResult || !deductResult.success) {
       return new Response(
         JSON.stringify({
-          error: "Kredit tidak cukup atau API key tidak valid. Silakan cek API key Anda di admin panel atau hubungi admin."
+          error: deductResult?.error_message || "Kredit tidak cukup atau API key tidak valid. Silakan cek API key Anda di admin panel atau hubungi admin."
         }),
         {
           status: 400,
@@ -139,6 +124,10 @@ Deno.serve(async (req: Request) => {
         }
       );
     }
+
+    const selectedApiKeyId = deductResult.api_key_id;
+    const apiKeyToUse = deductResult.api_key_value;
+    const useLegacyCredit = deductResult.use_legacy;
 
     const falEndpoint = getFalEndpoint(modelVersion, variant);
 
@@ -163,8 +152,8 @@ Deno.serve(async (req: Request) => {
       }
     };
 
-    if (selectedApiKey) {
-      historyData.api_key_id = selectedApiKey.id;
+    if (selectedApiKeyId) {
+      historyData.api_key_id = selectedApiKeyId;
     }
 
     const { data: historyEntry, error: historyError } = await supabase
@@ -174,6 +163,18 @@ Deno.serve(async (req: Request) => {
       .single();
 
     if (historyError || !historyEntry) {
+      if (selectedApiKeyId) {
+        await supabase.rpc("increment_api_key_credits", {
+          p_api_key_id: selectedApiKeyId,
+          p_amount: creditsNeeded,
+        });
+      } else if (useLegacyCredit) {
+        await supabase.rpc("increment_user_credits", {
+          p_user_id: userId,
+          p_amount: creditsNeeded,
+        });
+      }
+
       return new Response(
         JSON.stringify({ error: "Failed to create history entry" }),
         {
@@ -181,18 +182,6 @@ Deno.serve(async (req: Request) => {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         }
       );
-    }
-
-    if (selectedApiKey) {
-      await supabase
-        .from("api_keys")
-        .update({ credits: selectedApiKey.credits - creditsNeeded })
-        .eq("id", selectedApiKey.id);
-    } else if (useLegacyCredit) {
-      await supabase
-        .from("users")
-        .update({ credits: user.credits - creditsNeeded })
-        .eq("id", userId);
     }
 
     const falPayload = buildFalPayload({
@@ -231,16 +220,16 @@ Deno.serve(async (req: Request) => {
           .update({ status: "failed" })
           .eq("id", historyEntry.id);
 
-        if (selectedApiKey) {
-          await supabase
-            .from("api_keys")
-            .update({ credits: selectedApiKey.credits + creditsNeeded })
-            .eq("id", selectedApiKey.id);
+        if (selectedApiKeyId) {
+          await supabase.rpc("increment_api_key_credits", {
+            p_api_key_id: selectedApiKeyId,
+            p_amount: creditsNeeded,
+          });
         } else if (useLegacyCredit) {
-          await supabase
-            .from("users")
-            .update({ credits: user.credits + creditsNeeded })
-            .eq("id", userId);
+          await supabase.rpc("increment_user_credits", {
+            p_user_id: userId,
+            p_amount: creditsNeeded,
+          });
         }
 
         return new Response(
@@ -270,7 +259,7 @@ Deno.serve(async (req: Request) => {
           message: "Video sedang diproses. Silakan tunggu beberapa saat.",
           historyId: historyEntry.id,
           requestId: falResponse.request_id,
-          usedApiKeyId: selectedApiKey?.id || null,
+          usedApiKeyId: selectedApiKeyId || null,
           usedLegacyCredit: useLegacyCredit,
         }),
         {
@@ -285,16 +274,16 @@ Deno.serve(async (req: Request) => {
         .update({ status: "failed" })
         .eq("id", historyEntry.id);
 
-      if (selectedApiKey) {
-        await supabase
-          .from("api_keys")
-          .update({ credits: selectedApiKey.credits + creditsNeeded })
-          .eq("id", selectedApiKey.id);
+      if (selectedApiKeyId) {
+        await supabase.rpc("increment_api_key_credits", {
+          p_api_key_id: selectedApiKeyId,
+          p_amount: creditsNeeded,
+        });
       } else if (useLegacyCredit) {
-        await supabase
-          .from("users")
-          .update({ credits: user.credits + creditsNeeded })
-          .eq("id", userId);
+        await supabase.rpc("increment_user_credits", {
+          p_user_id: userId,
+          p_amount: creditsNeeded,
+        });
       }
 
       return new Response(
