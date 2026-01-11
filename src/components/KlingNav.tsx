@@ -48,14 +48,14 @@ export default function KlingNav({ currentVersion, onVersionChange }: KlingNavPr
     <div className="bg-white rounded-xl shadow-lg p-6 mb-8">
 
       <div className="flex items-center gap-3 mb-4">
-  <a
-    href="https://www.facebook.com/bayusugiarto30/"
-    target="_blank"
-    rel="noopener noreferrer"
-    className="text-xl font-bold text-gray-800 hover:underline"
-  >
-    By BS30
-  </a>
+        <a
+        href="https://www.facebook.com/bayusugiarto30/"
+        target="_blank"
+        rel="noopener noreferrer"
+        className="text-xl font-bold text-gray-800 hover:underline"
+        >
+        - By BS30 -
+      </a>
       </div>
       
       <div className="flex items-center gap-3 mb-4">
