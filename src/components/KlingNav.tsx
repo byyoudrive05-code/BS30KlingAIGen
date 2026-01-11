@@ -47,7 +47,7 @@ export default function KlingNav({ currentVersion, onVersionChange }: KlingNavPr
   return (
     <div className="bg-white rounded-xl shadow-lg p-6 mb-8">
 
-      <div className="flex items-center gap-3 mb-4">
+      <div className="flex items-center gap-3 mb-4 flex justify-center items-center h-screen">
         <a
         href="https://www.facebook.com/bayusugiarto30/"
         target="_blank"
