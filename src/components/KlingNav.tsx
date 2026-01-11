@@ -47,15 +47,10 @@ export default function KlingNav({ currentVersion, onVersionChange }: KlingNavPr
   return (
     <div className="bg-white rounded-xl shadow-lg p-6 mb-8">
 
-      <div className="flex justify-center items-center h-screen">
-  <a
-    href="https://www.facebook.com/bayusugiarto30/"
-    target="_blank"
-    rel="noopener noreferrer"
-  >
-    By BS30
-  </a>
-</div>
+      <div className="flex items-center gap-3 mb-4">
+        <Video className="w-6 h-6 text-blue-600" />
+        <h2 className="text-xl font-bold text-gray-800">Pilih Model Kling AI</h2>
+      </div>
       
       <div className="flex items-center gap-3 mb-4">
         <Video className="w-6 h-6 text-blue-600" />
