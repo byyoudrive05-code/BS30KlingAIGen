@@ -70,7 +70,7 @@ Deno.serve(async (req: Request) => {
         const createdAt = new Date(video.created_at);
         const now = new Date();
         const minutesElapsed = (now.getTime() - createdAt.getTime()) / (1000 * 60);
-        const timeoutMinutes = 15;
+        const timeoutMinutes = 60;
 
         if (minutesElapsed > timeoutMinutes) {
           console.log(`Video ${video.id} timed out after ${minutesElapsed.toFixed(2)} minutes, marking as failed and refunding credits`);
