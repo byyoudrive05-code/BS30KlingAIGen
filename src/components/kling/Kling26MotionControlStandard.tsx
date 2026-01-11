@@ -200,7 +200,7 @@ export default function Kling26MotionControlStandard({ user, currentCredits, onG
       setPrompt('');
       clearImage();
       clearVideo();
-      setCharacterOrientation('');
+      setCharacterOrientation('video');
       onGenerate();
     } catch (err) {
       console.error('Error:', err);

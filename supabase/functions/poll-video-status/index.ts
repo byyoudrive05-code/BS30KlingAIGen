@@ -23,7 +23,7 @@ Deno.serve(async (req: Request) => {
 
     const { data: processingVideos, error: fetchError } = await supabase
       .from("generation_history")
-      .select("id, request_id, user_id, credits_used, api_key_id, model_version, variant, fal_status_url, fal_response_url, fal_endpoint")
+      .select("id, request_id, user_id, credits_used, api_key_id, model_version, variant, fal_status_url, fal_response_url, fal_endpoint, created_at")
       .eq("status", "processing")
       .not("request_id", "is", null)
       .limit(50);
@@ -63,8 +63,60 @@ Deno.serve(async (req: Request) => {
         console.log(`Processing video ${video.id}:`, {
           model_version: video.model_version,
           variant: video.variant,
-          request_id: video.request_id
+          request_id: video.request_id,
+          created_at: video.created_at
         });
+
+        const createdAt = new Date(video.created_at);
+        const now = new Date();
+        const minutesElapsed = (now.getTime() - createdAt.getTime()) / (1000 * 60);
+        const timeoutMinutes = 15;
+
+        if (minutesElapsed > timeoutMinutes) {
+          console.log(`Video ${video.id} timed out after ${minutesElapsed.toFixed(2)} minutes, marking as failed and refunding credits`);
+
+          const { error: updateError } = await supabase
+            .from("generation_history")
+            .update({ status: "failed" })
+            .eq("id", video.id);
+
+          if (updateError) {
+            console.error(`Failed to update status to failed for ${video.id}:`, updateError);
+          }
+
+          if (video.api_key_id) {
+            const { data: currentApiKey, error: apiKeyError } = await supabase
+              .from("api_keys")
+              .select("credits")
+              .eq("id", video.api_key_id)
+              .maybeSingle();
+
+            if (!apiKeyError && currentApiKey) {
+              await supabase
+                .from("api_keys")
+                .update({ credits: currentApiKey.credits + video.credits_used })
+                .eq("id", video.api_key_id);
+              console.log(`Refunded ${video.credits_used} credits to API key ${video.api_key_id}`);
+            }
+          } else {
+            const { data: currentUser, error: userError } = await supabase
+              .from("users")
+              .select("credits")
+              .eq("id", video.user_id)
+              .maybeSingle();
+
+            if (!userError && currentUser) {
+              await supabase
+                .from("users")
+                .update({ credits: currentUser.credits + video.credits_used })
+                .eq("id", video.user_id);
+              console.log(`Refunded ${video.credits_used} credits to user ${video.user_id}`);
+            }
+          }
+
+          failed++;
+          continue;
+        }
 
         let apiKeyToUse = null;
 
@@ -172,37 +224,68 @@ Deno.serve(async (req: Request) => {
             console.error(`Failed to fetch result for ${video.request_id}:`, resultResponse.status);
           }
         } else if (statusData.status === "FAILED" || statusData.status === "CANCELLED") {
-          console.log(`Video ${video.request_id} failed or was cancelled`);
-          await supabase
+          console.log(`Video ${video.request_id} failed or was cancelled, refunding ${video.credits_used} credits`);
+
+          const { error: updateError } = await supabase
             .from("generation_history")
             .update({ status: "failed" })
             .eq("id", video.id);
 
+          if (updateError) {
+            console.error(`Failed to update status to failed for ${video.id}:`, updateError);
+          } else {
+            console.log(`Status updated to failed for ${video.id}`);
+          }
+
           if (video.api_key_id) {
-            const { data: currentApiKey } = await supabase
+            console.log(`Refunding credits to API key ${video.api_key_id}`);
+            const { data: currentApiKey, error: apiKeyError } = await supabase
               .from("api_keys")
               .select("credits")
               .eq("id", video.api_key_id)
               .maybeSingle();
 
-            if (currentApiKey) {
-              await supabase
+            if (apiKeyError) {
+              console.error(`Failed to fetch API key credits:`, apiKeyError);
+            } else if (currentApiKey) {
+              const newCredits = currentApiKey.credits + video.credits_used;
+              console.log(`Refunding to API key: ${currentApiKey.credits} + ${video.credits_used} = ${newCredits}`);
+
+              const { error: refundError } = await supabase
                 .from("api_keys")
-                .update({ credits: currentApiKey.credits + video.credits_used })
+                .update({ credits: newCredits })
                 .eq("id", video.api_key_id);
+
+              if (refundError) {
+                console.error(`Failed to refund credits to API key:`, refundError);
+              } else {
+                console.log(`Successfully refunded ${video.credits_used} credits to API key ${video.api_key_id}`);
+              }
             }
           } else {
-            const { data: currentUser } = await supabase
+            console.log(`Refunding credits to user ${video.user_id}`);
+            const { data: currentUser, error: userError } = await supabase
               .from("users")
               .select("credits")
               .eq("id", video.user_id)
               .maybeSingle();
 
-            if (currentUser) {
-              await supabase
+            if (userError) {
+              console.error(`Failed to fetch user credits:`, userError);
+            } else if (currentUser) {
+              const newCredits = currentUser.credits + video.credits_used;
+              console.log(`Refunding to user: ${currentUser.credits} + ${video.credits_used} = ${newCredits}`);
+
+              const { error: refundError } = await supabase
                 .from("users")
-                .update({ credits: currentUser.credits + video.credits_used })
+                .update({ credits: newCredits })
                 .eq("id", video.user_id);
+
+              if (refundError) {
+                console.error(`Failed to refund credits to user:`, refundError);
+              } else {
+                console.log(`Successfully refunded ${video.credits_used} credits to user ${video.user_id}`);
+              }
             }
           }
 
