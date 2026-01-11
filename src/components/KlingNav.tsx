@@ -52,7 +52,6 @@ export default function KlingNav({ currentVersion, onVersionChange }: KlingNavPr
     href="https://www.facebook.com/bayusugiarto30/"
     target="_blank"
     rel="noopener noreferrer"
-    className="text-xl font-bold text-gray-800 hover:underline"
   >
     By BS30
   </a>
