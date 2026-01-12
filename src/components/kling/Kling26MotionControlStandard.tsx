@@ -11,9 +11,10 @@ interface Kling26MotionControlStandardProps {
   reusedPrompt?: string | null;
   onPromptUsed?: () => void;
   hasProcessingVideo?: boolean;
+  processingCount?: number;
 }
 
-export default function Kling26MotionControlStandard({ user, currentCredits, onGenerate, reusedPrompt, onPromptUsed, hasProcessingVideo }: Kling26MotionControlStandardProps) {
+export default function Kling26MotionControlStandard({ user, currentCredits, onGenerate, reusedPrompt, onPromptUsed, hasProcessingVideo, processingCount = 0 }: Kling26MotionControlStandardProps) {
   const [prompt, setPrompt] = useState('');
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [videoFile, setVideoFile] = useState<File | null>(null);
@@ -249,8 +250,8 @@ export default function Kling26MotionControlStandard({ user, currentCredits, onG
         <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4 flex items-start gap-3">
           <AlertCircle className="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5" />
           <div>
-            <p className="text-sm font-semibold text-yellow-800 mb-1">Video sedang diproses</p>
-            <p className="text-xs text-yellow-700">Harap tunggu hingga video sebelumnya selesai diproses sebelum memulai generate baru. Cek riwayat untuk status video.</p>
+            <p className="text-sm font-semibold text-yellow-800 mb-1">Batas maksimal tercapai ({processingCount} / 3)</p>
+            <p className="text-xs text-yellow-700">Anda sudah memiliki 3 video yang sedang diproses. Harap tunggu hingga ada yang selesai sebelum memulai generate baru.</p>
           </div>
         </div>
       )}

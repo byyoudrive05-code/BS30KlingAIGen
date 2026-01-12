@@ -31,6 +31,7 @@ export default function KlingDashboard({ user: initialUser, onLogout, onUserUpda
   const [currentUser, setCurrentUser] = useState<User>(initialUser);
   const [historyRefreshTrigger, setHistoryRefreshTrigger] = useState(0);
   const [hasProcessingVideo, setHasProcessingVideo] = useState(false);
+  const [processingCount, setProcessingCount] = useState(0);
 
   useEffect(() => {
     console.log('KlingDashboard: User prop updated', { role: initialUser.role, username: initialUser.username });
@@ -40,18 +41,21 @@ export default function KlingDashboard({ user: initialUser, onLogout, onUserUpda
   const checkProcessingStatus = useCallback(async () => {
     if (currentUser.role !== 'user') {
       setHasProcessingVideo(false);
+      setProcessingCount(0);
       return;
     }
 
-    const { data, error } = await supabase
+    const { count, error } = await supabase
       .from('generation_history')
-      .select('id')
+      .select('*', { count: 'exact', head: true })
       .eq('user_id', currentUser.id)
-      .eq('status', 'processing')
-      .limit(1);
+      .eq('status', 'processing');
 
-    if (!error && data) {
-      setHasProcessingVideo(data.length > 0);
+    const currentCount = count || 0;
+    setProcessingCount(currentCount);
+
+    if (!error) {
+      setHasProcessingVideo(currentCount >= 3);
     }
   }, [currentUser.id, currentUser.role]);
 
@@ -168,6 +172,7 @@ export default function KlingDashboard({ user: initialUser, onLogout, onUserUpda
       reusedPrompt,
       onPromptUsed: () => setReusedPrompt(null),
       hasProcessingVideo,
+      processingCount,
     };
 
     switch (currentVersion) {
