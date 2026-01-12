@@ -329,7 +329,7 @@ export default function Kling26MotionControlStandard({ user, currentCredits, onG
                 <Film className="w-8 h-8 text-gray-400 mb-2" />
                 <span className="text-sm text-gray-600">Klik untuk upload video</span>
                 <span className="text-xs text-gray-500 mt-1">
-                  {user.role === 'user' ? 'Max: 10 detik' : 'Max: 30 detik (Premium/Admin)'}
+                  {user.role === 'user' ? 'Max: 10 detik' : 'Max: 30 detik (Premium)'}
                 </span>
                 <input
                   type="file"
