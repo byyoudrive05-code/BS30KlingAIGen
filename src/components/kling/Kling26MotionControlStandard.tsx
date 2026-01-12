@@ -60,10 +60,21 @@ export default function Kling26MotionControlStandard({ user, currentCredits, onG
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      setImageFile(file);
       const reader = new FileReader();
       reader.onloadend = () => {
-        setImagePreview(reader.result as string);
+        const imageUrl = reader.result as string;
+        const img = new Image();
+        img.onload = () => {
+          if (img.width > 3850 || img.height > 3850) {
+            alert('Dimensi gambar maksimal 3850x3850 pixels');
+            setImageFile(null);
+            setImagePreview('');
+          } else {
+            setImageFile(file);
+            setImagePreview(imageUrl);
+          }
+        };
+        img.src = imageUrl;
       };
       reader.readAsDataURL(file);
     }
@@ -283,6 +294,7 @@ export default function Kling26MotionControlStandard({ user, currentCredits, onG
               <label className="flex flex-col items-center justify-center w-full h-40 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:border-blue-500 transition-colors">
                 <ImageIcon className="w-8 h-8 text-gray-400 mb-2" />
                 <span className="text-sm text-gray-600">Klik untuk upload gambar</span>
+                <span className="text-xs text-gray-500 mt-1">Max: 3850x3850 pixels</span>
                 <input
                   type="file"
                   accept="image/*"
@@ -316,6 +328,9 @@ export default function Kling26MotionControlStandard({ user, currentCredits, onG
               <label className="flex flex-col items-center justify-center w-full h-40 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:border-blue-500 transition-colors">
                 <Film className="w-8 h-8 text-gray-400 mb-2" />
                 <span className="text-sm text-gray-600">Klik untuk upload video</span>
+                <span className="text-xs text-gray-500 mt-1">
+                  {user.role === 'user' ? 'Max: 10 detik' : 'Max: 30 detik (Premium/Admin)'}
+                </span>
                 <input
                   type="file"
                   accept="video/*"
