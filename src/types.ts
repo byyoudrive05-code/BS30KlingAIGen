@@ -27,6 +27,7 @@ export interface GenerationHistory {
   variant: string;
   audio_enabled: boolean;
   metadata: any;
+  request_id: string;
 }
 
 export interface CreditPricing {

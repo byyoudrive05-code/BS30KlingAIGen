@@ -317,6 +317,17 @@ export default function History({ userId, onVideoClick, onReusePrompt, refreshTr
                     <span>{item.duration}s</span>
                     <span>{item.credits_used} credits</span>
                   </div>
+                  {(item.model_version || item.variant) && (
+                    <div className="flex items-center gap-2 mt-2">
+                      <span className="text-xs font-medium text-blue-600 bg-blue-50 px-2 py-1 rounded">
+                        {item.model_version && `Kling ${item.model_version}`}
+                        {item.model_version && item.variant && ' - '}
+                        {item.variant && item.variant.split('-').map((word: string) =>
+                          word.charAt(0).toUpperCase() + word.slice(1)
+                        ).join(' ')}
+                      </span>
+                    </div>
+                  )}
                   <p className="text-xs text-gray-500 mt-1">
                     {new Date(item.created_at).toLocaleString('id-ID')}
                   </p>
