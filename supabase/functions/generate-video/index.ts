@@ -100,6 +100,16 @@ Deno.serve(async (req: Request) => {
       );
     }
 
+    if (variant.includes('motion-control') && characterOrientation === 'image' && duration && duration > 10) {
+      return new Response(
+        JSON.stringify({ error: "Untuk character orientation 'image', durasi video maksimal 10 detik" }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
+
     let creditsNeeded = priceData.price;
     if (priceData.is_per_second && duration) {
       creditsNeeded = priceData.price * duration;

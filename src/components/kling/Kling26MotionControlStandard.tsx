@@ -81,8 +81,14 @@ export default function Kling26MotionControlStandard({ user, currentCredits, onG
         video.preload = 'metadata';
         video.onloadedmetadata = () => {
           const duration = Math.round(video.duration);
-          const maxDuration = (user.role === 'admin' || user.role === 'premium') ? 30 : 10;
-          if (duration > maxDuration) {
+          let maxDuration = (user.role === 'admin' || user.role === 'premium') ? 30 : 10;
+
+          if (characterOrientation === 'image' && duration > 10) {
+            alert('Untuk character orientation "image", durasi video maksimal 10 detik');
+            setVideoFile(null);
+            setVideoPreview('');
+            setVideoDuration(0);
+          } else if (duration > maxDuration) {
             setVideoFile(null);
             setVideoPreview('');
             setVideoDuration(0);
@@ -116,6 +122,11 @@ export default function Kling26MotionControlStandard({ user, currentCredits, onG
     }
 
     if (!imageFile && !videoFile) {
+      return;
+    }
+
+    if (characterOrientation === 'image' && videoDuration > 10) {
+      alert('Untuk character orientation "image", durasi video maksimal 10 detik');
       return;
     }
 
@@ -326,8 +337,13 @@ export default function Kling26MotionControlStandard({ user, currentCredits, onG
             className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           >
             <option value="video">Video</option>
-            <option value="image">Image</option>
+            <option value="image">Image (max 10 detik)</option>
           </select>
+          {characterOrientation === 'image' && (
+            <p className="text-xs text-gray-600 mt-1">
+              Untuk character orientation "image", durasi video maksimal 10 detik
+            </p>
+          )}
         </div>
 
         <div>
