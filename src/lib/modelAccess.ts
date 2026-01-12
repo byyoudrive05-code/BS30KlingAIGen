@@ -47,36 +47,37 @@ export async function checkModelAccess(
 
 export async function checkProcessingStatus(
   user: User
-): Promise<{ hasProcessing: boolean; message?: string }> {
+): Promise<{ hasProcessing: boolean; message?: string; processingCount?: number }> {
   console.log('Checking processing status for user:', { userId: user.id, role: user.role });
 
   if (!user.role || user.role === 'admin' || user.role === 'premium') {
     console.log('User has admin/premium access or no role set, skipping processing check');
-    return { hasProcessing: false };
+    return { hasProcessing: false, processingCount: 0 };
   }
 
-  const { data, error } = await supabase
+  const { count, error } = await supabase
     .from('generation_history')
-    .select('id, prompt, created_at, status')
+    .select('*', { count: 'exact', head: true })
     .eq('user_id', user.id)
-    .eq('status', 'processing')
-    .maybeSingle();
+    .eq('status', 'processing');
 
-  console.log('Processing status check result:', { data, error });
+  const processingCount = count || 0;
+  console.log('Processing status check result:', { processingCount, error });
 
   if (error) {
     console.error('Error checking processing status:', error);
-    return { hasProcessing: false };
+    return { hasProcessing: false, processingCount: 0 };
   }
 
-  if (data) {
-    console.log('User has processing video, blocking new generation');
+  if (processingCount >= 3) {
+    console.log('User has reached max processing limit (3), blocking new generation');
     return {
       hasProcessing: true,
-      message: 'Anda memiliki video yang sedang diproses. Tunggu hingga selesai sebelum generate video baru.',
+      processingCount,
+      message: `Anda sudah memiliki ${processingCount} video yang sedang diproses (maksimal 3). Tunggu hingga ada yang selesai sebelum generate video baru.`,
     };
   }
 
-  console.log('No processing video found, allowing generation');
-  return { hasProcessing: false };
+  console.log('Processing count within limit, allowing generation');
+  return { hasProcessing: false, processingCount };
 }
